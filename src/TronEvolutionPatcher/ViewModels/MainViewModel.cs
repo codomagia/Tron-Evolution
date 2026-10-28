@@ -83,6 +83,11 @@ namespace TronEvolutionPatcher.ViewModels
                 await Task.Run(() => desktop.OpenSupport());
                 AddLog("Открыта страница поддержки CodoMagia.");
             }, () => IsIdle);
+            CopyProfileCommand = Command(() => RunMutationAsync("Копирование существующего профиля", () =>
+            {
+                var directory = GameDirectory; var target = UserDirectory;
+                return () => backend.CopyProfile(directory, target);
+            }, false), () => CanCopyProfile);
             AddLog("TRON: Evolution Patcher 1.0.0 готов к работе.");
         }
 
@@ -97,6 +102,7 @@ namespace TronEvolutionPatcher.ViewModels
         public AsyncCommand UpdateDxvkCommand { get; }
         public AsyncCommand LaunchCommand { get; }
         public AsyncCommand SupportCommand { get; }
+        public AsyncCommand CopyProfileCommand { get; }
         public Task PendingDxvkUpdate { get; private set; } = Task.CompletedTask;
         public ObservableCollection<string> LogEntries { get; } = new ObservableCollection<string>();
         public string LogText => string.Join(Environment.NewLine, LogEntries);
@@ -111,7 +117,28 @@ namespace TronEvolutionPatcher.ViewModels
         public bool MotionBlur { get => motionBlur; set => Set(ref motionBlur, value); }
         public bool VSync { get => vsync; set => Set(ref vsync, value); }
         public bool NoRegistry { get => noRegistry; set => Set(ref noRegistry, value); }
-        public bool UserDirectory { get => userDirectory; set => Set(ref userDirectory, value); }
+        public bool UserDirectory { get => userDirectory; set { if (Set(ref userDirectory, value)) Invalidate(); } }
+        private GameProfileStatus SelectedProfile => UserDirectory ? snapshot?.PortableProfile : snapshot?.DocumentsProfile;
+        private GameProfileStatus OtherProfile => UserDirectory ? snapshot?.DocumentsProfile : snapshot?.PortableProfile;
+        public bool CanCopyProfile => CanUseGame && SelectedProfile != null && !SelectedProfile.ContainsFiles && OtherProfile?.IsInitialized == true;
+        public string ProfileNotice
+        {
+            get
+            {
+                var target = SelectedProfile;
+                if (target == null || target.IsInitialized) return "";
+                var location = UserDirectory ? "UserData" : "Документы";
+                var missing = !target.HasEngineIni && !target.HasCheckpoint ? "GridEngine.ini и сохранение CHECKPT" :
+                    !target.HasEngineIni ? "GridEngine.ini" : "сохранение CHECKPT";
+                var text = "В профиле «" + location + "» отсутствует " + missing + ". Настройки не будут применены.\n" + target.DirectoryPath;
+                if (OtherProfile?.IsInitialized == true)
+                    return text + "\nНайден другой профиль: " + OtherProfile.DirectoryPath +
+                        (target.ContainsFiles ? "\nЦелевая папка не пустая: выберите существующий профиль или сохраните неполный профиль отдельно перед копированием. Перезапись и смешивание отключены." :
+                        "\nНажмите «Копировать профиль»: источник останется на месте. Затем примените настройки.");
+                return text + "\nЗапустите игру, создайте профиль и дойдите до первого сохранения, затем нажмите «Обновить». Сейчас игра использует «" +
+                    (snapshot.Status.UserDirectoryRedirected ? "UserData" : "Документы") + "». Патчер не создаёт игровые файлы вместо игры.";
+            }
+        }
         public bool HudEnabled { get => hud; set { if (Set(ref hud, value)) QueueDxvkUpdate(); } }
         public bool AnisotropyEnabled { get => anisotropy; set { if (Set(ref anisotropy, value)) QueueDxvkUpdate(); } }
         public string ErrorMessage { get => errorMessage; private set => Set(ref errorMessage, value); }
@@ -240,9 +267,9 @@ namespace TronEvolutionPatcher.ViewModels
 
         private void Invalidate()
         {
-            foreach (var property in new[] { nameof(IsIdle), nameof(CanUseGame), nameof(CanEditSettings), nameof(CanRedirectUserData) }) Notify(property);
+            foreach (var property in new[] { nameof(IsIdle), nameof(CanUseGame), nameof(CanEditSettings), nameof(CanRedirectUserData), nameof(ProfileNotice), nameof(CanCopyProfile) }) Notify(property);
             foreach (var command in new[] { SelectDirectoryCommand, BrowseCommand, DiscoverCommand, RefreshCommand, VulkanCommand,
-                DirectXCommand, ApplyCommand, UpdateDxvkCommand, LaunchCommand, SupportCommand }) command?.RaiseCanExecuteChanged();
+                DirectXCommand, ApplyCommand, UpdateDxvkCommand, LaunchCommand, SupportCommand, CopyProfileCommand }) command?.RaiseCanExecuteChanged();
         }
 
         private bool Set<T>(ref T field, T value, [CallerMemberName] string name = null)

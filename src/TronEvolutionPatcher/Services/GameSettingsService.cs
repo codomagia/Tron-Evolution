@@ -73,46 +73,18 @@ namespace TronEvolutionPatcher.Services
             catch (FileNotFoundException) { }
             catch (DirectoryNotFoundException) { }
 
-            var source = original;
-            if (source == null)
-            {
-                var template = string.IsNullOrWhiteSpace(win32Directory) ? null :
-                    Path.GetFullPath(Path.Combine(win32Directory, "..", "..", "GridGame", "Config", "DefaultEngine.ini"));
-                if (template == null) throw MissingConfiguration(path);
-                try { source = ReadIniFile(template); }
-                catch (FileNotFoundException) { throw MissingConfiguration(path); }
-                catch (DirectoryNotFoundException) { throw MissingConfiguration(path); }
-            }
-            var updated = new GameIniDocument(source).Apply(normalized);
+            if (original == null) throw MissingConfiguration(path);
+            var updated = new GameIniDocument(original).Apply(normalized);
             var directory = Path.GetDirectoryName(path);
-            var createdDirectories = new List<string>();
-            try
+            var recovery = new FileChangeTransaction(mutation).Execute(directory, new List<FileChange>
             {
-                EnsureDirectories(directory, createdDirectories);
-                var recovery = new FileChangeTransaction(mutation).Execute(directory, new List<FileChange>
-                {
-                    new FileChange
-                    {
-                        Path = path, Contents = updated, ExpectedOriginal = original,
-                        MustNotExist = original == null, ProtectAfterWrite = true
-                    }
-                });
-                return new GameSettingsWriteResult
-                {
-                    IniPath = path, CreatedFromDefault = original == null,
-                    ContentChanged = original == null || !original.SequenceEqual(updated), RecoveryDirectory = recovery
-                };
-            }
-            catch
+                new FileChange { Path = path, Contents = updated, ExpectedOriginal = original, ProtectAfterWrite = true }
+            });
+            return new GameSettingsWriteResult
             {
-                // Remove only newly created empty directories; retained recovery snapshots are preserved.
-                for (var index = createdDirectories.Count - 1; index >= 0; index--)
-                {
-                    try { Directory.Delete(createdDirectories[index], false); }
-                    catch (Exception error) when (error is IOException || error is UnauthorizedAccessException || error is SecurityException) { }
-                }
-                throw;
-            }
+                IniPath = path, CreatedFromDefault = false,
+                ContentChanged = !original.SequenceEqual(updated), RecoveryDirectory = recovery
+            };
         }
 
         private static byte[] ReadIniFile(string path)
@@ -146,23 +118,7 @@ namespace TronEvolutionPatcher.Services
 
         private static FileNotFoundException MissingConfiguration(string path)
         {
-            return new FileNotFoundException("GridEngine.ini и шаблон DefaultEngine.ini не найдены. Запустите игру хотя бы один раз для создания настроек.", path);
-        }
-
-        private static void EnsureDirectories(string directory, List<string> created)
-        {
-            var missing = new Stack<string>();
-            for (var current = directory; !Directory.Exists(current); current = Path.GetDirectoryName(current))
-            {
-                if (string.IsNullOrEmpty(current)) throw new DirectoryNotFoundException(directory);
-                missing.Push(current);
-            }
-            while (missing.Count > 0)
-            {
-                var current = missing.Pop();
-                Directory.CreateDirectory(current);
-                created.Add(current);
-            }
+            return new FileNotFoundException("Пользовательский GridEngine.ini отсутствует. Запустите игру для создания профиля или скопируйте существующий профиль. DefaultEngine.ini не используется для создания пользовательских настроек.", path);
         }
 
         public GameSettings Parse(TextReader reader)

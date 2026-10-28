@@ -50,6 +50,11 @@
                     <CheckBox Content="Автономный запуск (No-Registry)" IsChecked="{Binding NoRegistry}" IsEnabled="{Binding CanEditSettings}" />
                     <CheckBox Content="Сохранения и настройки внутри игры" IsChecked="{Binding UserDirectory}" IsEnabled="{Binding CanRedirectUserData}" ToolTip="Папка UserData. Существующие профили не объединяются и не перезаписываются." />
                 </WrapPanel></Border>
+                <StackPanel Margin="0,0,0,10">
+                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding ProfileNotice}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Text="{Binding ProfileNotice}" TextWrapping="Wrap" Foreground="#FFD38A" FontSize="12" Margin="0,0,0,8" />
+                    <Button Content="Копировать профиль" Command="{Binding CopyProfileCommand}" HorizontalAlignment="Left" ToolTip="Копировать профиль из другого расположения в выбранное. Исходник сохраняется; целевая папка должна быть пустой." />
+                </StackPanel>
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding IniDescription}" Foreground="{StaticResource MutedText}" FontSize="11" VerticalAlignment="Center" ToolTip="{Binding IniPath}" TextWrapping="Wrap" Margin="0,0,10,0" />
                     <Button Grid.Column="1" Content="Применить настройки" Command="{Binding ApplyCommand}" Background="#4738AE" BorderBrush="#8177EC" />

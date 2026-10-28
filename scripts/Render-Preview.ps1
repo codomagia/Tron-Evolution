@@ -1,4 +1,4 @@
-﻿param([int]$Width = 960, [int]$Height = 880, [switch]$Empty)
+﻿param([int]$Width = 960, [int]$Height = 880, [switch]$Empty, [ValidateSet("Ready", "Missing", "Copyable")][string]$Profile = "Ready")
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -26,7 +26,17 @@ if (-not $Empty) {
     Set-PreviewProperty $snapshot 'Status' $state
     Set-PreviewProperty $snapshot 'Settings' $settings
     Set-PreviewProperty $snapshot 'IniPath' 'F:\Games Portable\Tron Evolution\UserData\GridEngine.ini'
-    Set-PreviewProperty $snapshot 'IniExists' $true
+    Set-PreviewProperty $snapshot 'IniExists' ($Profile -eq 'Ready')
+    $documentsProfile = [Activator]::CreateInstance($patcherAssembly.GetType('TronEvolutionPatcher.Models.GameProfileStatus'))
+    $portableProfile = [Activator]::CreateInstance($patcherAssembly.GetType('TronEvolutionPatcher.Models.GameProfileStatus'))
+    Set-PreviewProperty $documentsProfile 'DirectoryPath' 'C:\Documents\Disney Interactive Studios\Tron Evolution'
+    Set-PreviewProperty $portableProfile 'DirectoryPath' 'F:\Games Portable\Tron Evolution\UserData\Disney Interactive Studios\Tron Evolution'
+    foreach ($field in @('HasEngineIni', 'HasCheckpoint', 'ContainsFiles')) {
+        Set-PreviewProperty $documentsProfile $field ($Profile -ne 'Missing')
+        Set-PreviewProperty $portableProfile $field ($Profile -eq 'Ready')
+    }
+    Set-PreviewProperty $snapshot 'DocumentsProfile' $documentsProfile
+    Set-PreviewProperty $snapshot 'PortableProfile' $portableProfile
     $viewModel = $window.DataContext
     Set-PreviewProperty $viewModel 'GameDirectory' 'F:\Games Portable\Tron Evolution\Binaries\Win32Live'
     $viewModel.DirectoryInput = $viewModel.GameDirectory
@@ -44,7 +54,7 @@ $bitmap = [Windows.Media.Imaging.RenderTargetBitmap]::new($Width, $Height, 96, 9
 $bitmap.Render($content)
 $outputDirectory = Join-Path $projectRoot 'artifacts\ui'
 [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
-$suffix = if ($Empty) { 'empty' } else { 'vulkan' }
+$suffix = if ($Empty) { 'empty' } elseif ($Profile -ne 'Ready') { 'profile-' + $Profile.ToLowerInvariant() } else { 'vulkan' }
 $outputPath = Join-Path $outputDirectory ("preview-$Width-$Height-$suffix.png")
 $encoder = [Windows.Media.Imaging.PngBitmapEncoder]::new()
 $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bitmap))

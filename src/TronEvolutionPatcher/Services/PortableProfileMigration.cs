@@ -20,6 +20,11 @@ namespace TronEvolutionPatcher.Services
             var relative = Path.Combine("Disney Interactive Studios", "Tron Evolution");
             var sourceBase = Path.Combine(documents, relative);
             var targetBase = Path.Combine(gameRoot, "UserData", relative);
+            PrepareBetween(documents, sourceBase, gameRoot, targetBase);
+        }
+
+        internal void PrepareBetween(string documents, string sourceBase, string gameRoot, string targetBase)
+        {
             if (Within(sourceBase, targetBase) || Within(targetBase, sourceBase))
                 throw new IOException("Исходный и portable-профили не должны находиться друг внутри друга.");
             var sourceConfig = Path.Combine(sourceBase, "UnrealEngine3", "GridGame", "Config");

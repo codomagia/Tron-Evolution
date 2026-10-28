@@ -53,11 +53,13 @@ namespace TronEvolutionPatcher.Tests
             private readonly Failure failure;
             private bool failed;
             public bool FailRollback;
+            public int Calls;
 
             public FaultMutation(Failure failure) { this.failure = failure; }
 
             public void Install(string stagedFile, string destination, bool replace)
             {
+                Calls++;
                 if (failed && FailRollback) throw new IOException("Simulated rollback failure");
                 if (!failed && (failure == Failure.InstallBefore || failure == Failure.InstallAfter))
                 {
@@ -68,10 +70,11 @@ namespace TronEvolutionPatcher.Tests
                 actual.Install(stagedFile, destination, replace);
             }
 
-            public void Delete(string path) { actual.Delete(path); }
+            public void Delete(string path) { Calls++; actual.Delete(path); }
 
             public void SetAttributes(string path, FileAttributes attributes)
             {
+                Calls++;
                 if (!failed && (attributes & FileAttributes.ReadOnly) != 0 &&
                     (failure == Failure.ProtectBefore || failure == Failure.ProtectAfter))
                 {
@@ -257,7 +260,7 @@ namespace TronEvolutionPatcher.Tests
         }
 
         [Test]
-        public void MissingIniIsBasedOnDefaultWithoutChangingTemplate()
+        public void MissingIniIsRejectedEvenWhenDefaultTemplateExists()
         {
             using (var temp = new TemporaryDirectory())
             {
@@ -266,14 +269,10 @@ namespace TronEvolutionPatcher.Tests
                 File.SetAttributes(template, FileAttributes.ReadOnly);
                 var before = File.ReadAllBytes(template);
                 var service = new GameSettingsService(Documents(temp));
-                var result = service.Apply(Desired(), Path.GetDirectoryName(exe));
-                Assert.That(result.CreatedFromDefault, Is.True);
-                Assert.That(result.ContentChanged, Is.True);
-                Assert.That(result.IniPath, Is.EqualTo(service.GetIniPath()));
-                AssertSettings(service.Read());
+                Assert.Throws<FileNotFoundException>(() => service.Apply(Desired(), Path.GetDirectoryName(exe)));
+                Assert.That(Directory.Exists(Documents(temp)), Is.False);
                 Assert.That(File.ReadAllBytes(template), Is.EqualTo(before));
                 Assert.That(File.GetAttributes(template) & FileAttributes.ReadOnly, Is.Not.Zero);
-                Assert.That(File.ReadAllText(result.IniPath), Does.Contain("CustomSetting=unchanged"));
             }
         }
 
@@ -396,15 +395,17 @@ namespace TronEvolutionPatcher.Tests
         [TestCase(Failure.InstallBefore)]
         [TestCase(Failure.InstallAfter)]
         [TestCase(Failure.ProtectAfter)]
-        public void FailureCreatingIniRemovesNewFileAndOnlyNewEmptyDirectories(Failure failure)
+        public void MissingIniIsRejectedBeforeAnyFileMutation(Failure failure)
         {
             using (var temp = new TemporaryDirectory())
             {
                 var exe = temp.Write("Game/Binaries/Win32Live/GridGame.exe", new byte[0]);
                 temp.WriteText("Game/GridGame/Config/DefaultEngine.ini", Template);
                 Directory.CreateDirectory(Documents(temp));
-                var service = new GameSettingsService(Documents(temp), new FaultMutation(failure));
-                Assert.Throws<IOException>(() => service.Apply(Desired(), Path.GetDirectoryName(exe)));
+                var mutation = new FaultMutation(failure);
+                var service = new GameSettingsService(Documents(temp), mutation);
+                Assert.Throws<FileNotFoundException>(() => service.Apply(Desired(), Path.GetDirectoryName(exe)));
+                Assert.That(mutation.Calls, Is.Zero);
                 Assert.That(Directory.Exists(Documents(temp)), Is.True);
                 Assert.That(Directory.GetFileSystemEntries(Documents(temp)), Is.Empty);
                 Assert.That(File.ReadAllText(Path.Combine(temp.Root, "Game/GridGame/Config/DefaultEngine.ini")), Is.EqualTo(Template));

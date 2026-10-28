@@ -16,6 +16,7 @@ namespace TronEvolutionPatcher.Services
         IList<string> ApplySettings(string directory, GameSettings settings, bool noRegistry, bool userDirectory, bool hud, bool anisotropy);
         IList<string> UpdateDxvk(string directory, bool hud, bool anisotropy);
         GameLaunchResult Launch(string directory);
+        IList<string> CopyProfile(string directory, bool toPortable);
     }
 
     internal sealed class PatcherBackend : IPatcherBackend
@@ -25,6 +26,7 @@ namespace TronEvolutionPatcher.Services
         private readonly GameStatusService status = new GameStatusService();
         private readonly GameSettingsService settings;
         private readonly PortablePatchService portable;
+        private readonly GameProfileService profiles;
 
         public PatcherBackend() : this(AppDomain.CurrentDomain.BaseDirectory,
             DocumentsDirectory()) { }
@@ -40,6 +42,7 @@ namespace TronEvolutionPatcher.Services
             this.applicationDirectory = Path.GetFullPath(applicationDirectory);
             settings = new GameSettingsService(documentsDirectory);
             portable = new PortablePatchService(documentsDirectory);
+            profiles = new GameProfileService(documentsDirectory);
         }
 
         public string Resolve(string path) { return directories.Resolve(path); }
@@ -61,6 +64,8 @@ namespace TronEvolutionPatcher.Services
             var snapshot = new PatcherSnapshot { Status = status.Read(directory) };
             try
             {
+                snapshot.DocumentsProfile = profiles.Inspect(directory, false);
+                snapshot.PortableProfile = profiles.Inspect(directory, true);
                 snapshot.IniPath = settings.GetIniPath(directory, snapshot.Status.UserDirectoryRedirected);
                 snapshot.IniExists = File.Exists(snapshot.IniPath);
                 snapshot.Settings = settings.Read(directory, snapshot.Status.UserDirectoryRedirected);
@@ -96,6 +101,8 @@ namespace TronEvolutionPatcher.Services
                 var current = status.Read(directory);
                 if (current.Renderer != RendererState.DirectX9 && current.Renderer != RendererState.Vulkan)
                     throw new InvalidDataException("Не удалось определить рендер выбранной игры.");
+                step = "Проверка профиля до изменения файлов";
+                profiles.RequireInitialized(directory, userDirectory);
                 var registryChanged = current.NoRegistryPatched != noRegistry;
                 var userDirChanged = current.UserDirectoryRedirected != userDirectory;
                 if (registryChanged || userDirChanged)
@@ -137,6 +144,8 @@ namespace TronEvolutionPatcher.Services
         }
 
         public GameLaunchResult Launch(string directory) { return new GameLaunchService().Launch(directory); }
+
+        public IList<string> CopyProfile(string directory, bool toPortable) { return profiles.Copy(directory, toPortable); }
 
         private static void Recovery(List<string> messages, string directory)
         {

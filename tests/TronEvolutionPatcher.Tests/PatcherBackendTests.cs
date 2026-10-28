@@ -34,6 +34,7 @@ namespace TronEvolutionPatcher.Tests
             {
                 var exe = temp.Write("Game/Binaries/Win32Live/GridGame.exe", PeFixture.Create());
                 var documents = temp.WriteText("Documents/" + Ini, "[SystemSettings]\nResX=1280");
+                temp.Write("Documents/Disney Interactive Studios/Tron Evolution/SaveData/profile/Save/CHECKPT", new byte[] { 1 });
                 var portable = temp.WriteText("Game/UserData/" + Ini, "[SystemSettings]\nResX=3840");
                 var backend = new PatcherBackend(temp.Root, Path.Combine(temp.Root, "Documents"));
                 var directory = Path.GetDirectoryName(exe);
@@ -55,10 +56,63 @@ namespace TronEvolutionPatcher.Tests
                 var exe = temp.Write("Game/Binaries/Win32Live/GridGame.exe", PortablePeFixture.Create());
                 var directory = Path.GetDirectoryName(exe);
                 var backend = new PatcherBackend(temp.Root, Path.Combine(temp.Root, "Documents"));
-                var error = Assert.Throws<IOException>(() => backend.ApplySettings(directory, new GameSettings(), true, false, false, false));
-                Assert.That(error.Message, Does.Contain("Уже выполнено"));
-                Assert.That(error.Message, Does.Contain("GridEngine.ini"));
+                var ini = temp.WriteText("Documents/" + Ini, "[SystemSettings]\nResX=1280");
+                temp.Write("Documents/Disney Interactive Studios/Tron Evolution/SaveData/profile/Save/CHECKPT", new byte[] { 1 });
+                using (var locked = new FileStream(ini, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    var error = Assert.Throws<IOException>(() => backend.ApplySettings(directory, new GameSettings(), true, false, false, false));
+                    Assert.That(error.Message, Does.Contain("Уже выполнено"));
+                    Assert.That(error.Message, Does.Contain("GridEngine.ini"));
+                }
                 Assert.That(backend.Load(directory).Status.NoRegistryPatched, Is.True);
+            }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void MissingProfileBlocksEveryApplyStepBeforeChangingExecutableOrCreatingIni(bool partialIni)
+        {
+            using (var temp = new TemporaryDirectory())
+            {
+                var original = PortablePeFixture.Create();
+                var exe = temp.Write("Game/Binaries/Win32Live/GridGame.exe", original);
+                temp.WriteText("Game/GridGame/Config/DefaultEngine.ini", "[SystemSettings]\nResX=1280");
+                if (partialIni)
+                {
+                    var partial = temp.WriteText("Game/UserData/" + Ini, "[SystemSettings]\nResX=1920");
+                    File.SetAttributes(partial, FileAttributes.ReadOnly);
+                }
+                var directory = Path.GetDirectoryName(exe);
+                var backend = new PatcherBackend(temp.Root, Path.Combine(temp.Root, "Documents"));
+                var error = Assert.Throws<IOException>(() => backend.ApplySettings(directory, new GameSettings(), true, true, false, false));
+                Assert.That(error.Message, Does.Contain("Проверка профиля"));
+                Assert.That(error.Message, Does.Contain("первого сохранения"));
+                Assert.That(PortableExecutablePatcherTests.Hash(File.ReadAllBytes(exe)), Is.EqualTo(PortableExecutablePatcherTests.Hash(original)));
+                Assert.That(File.Exists(Path.Combine(directory, GameStatusService.BackupName)), Is.False);
+                Assert.That(Directory.Exists(Path.Combine(temp.Root, "Game/UserData")), Is.EqualTo(partialIni));
+                if (partialIni) Assert.That(File.ReadAllText(Path.Combine(temp.Root, "Game/UserData/" + Ini)), Does.Contain("ResX=1920"));
+                Assert.That(Directory.Exists(Path.Combine(temp.Root, "Documents")), Is.False);
+            }
+        }
+
+        [Test]
+        public void ProfileCopyCanBeAppliedOnlyAfterExplicitCopyAndKeepsExistingSource()
+        {
+            using (var temp = new TemporaryDirectory())
+            {
+                var exe = temp.Write("Game/Binaries/Win32Live/GridGame.exe", PortablePeFixture.Create());
+                var directory = Path.GetDirectoryName(exe);
+                var sourceIni = temp.WriteText("Documents/" + Ini, "[SystemSettings]\nResX=1280");
+                var sourceSave = temp.Write("Documents/Disney Interactive Studios/Tron Evolution/SaveData/profile/Save/CHECKPT", new byte[] { 1, 2 });
+                var backend = new PatcherBackend(temp.Root, Path.Combine(temp.Root, "Documents"));
+                Assert.Throws<IOException>(() => backend.ApplySettings(directory, new GameSettings(), false, true, false, false));
+                Assert.That(backend.Load(directory).Status.UserDirectoryRedirected, Is.False);
+                backend.CopyProfile(directory, true);
+                Assert.That(backend.Load(directory).Status.UserDirectoryRedirected, Is.False, "Copying files must not change binary patches.");
+                backend.ApplySettings(directory, new GameSettings(), false, true, false, false);
+                Assert.That(backend.Load(directory).Status.UserDirectoryRedirected, Is.True);
+                Assert.That(File.ReadAllText(sourceIni), Does.Contain("ResX=1280"));
+                Assert.That(File.ReadAllBytes(sourceSave), Is.EqualTo(new byte[] { 1, 2 }));
             }
         }
 

@@ -18,6 +18,8 @@ namespace TronEvolutionPatcher.Tests
             public string Directory = @"C:\Games\Tron\Binaries\Win32Live";
             public bool ResolveFails;
             public int ApplyCalls, DxvkCalls, VulkanCalls, LaunchCalls;
+            public int CopyProfileCalls;
+            public bool CopiedToPortable;
             public Exception ApplyError;
             public Exception DxvkError;
             public ManualResetEventSlim Gate;
@@ -53,6 +55,13 @@ namespace TronEvolutionPatcher.Tests
                 return new[] { "DXVK сохранён." };
             }
             public GameLaunchResult Launch(string directory) { LaunchCalls++; return new GameLaunchResult { ExecutablePath = "GridGame.exe", ProcessId = 42 }; }
+            public IList<string> CopyProfile(string directory, bool toPortable)
+            {
+                CopyProfileCalls++; CopiedToPortable = toPortable;
+                var target = toPortable ? Current.PortableProfile : Current.DocumentsProfile;
+                target.HasEngineIni = true; target.HasCheckpoint = true; target.ContainsFiles = true;
+                return new[] { "Профиль скопирован." };
+            }
         }
 
         internal sealed class FakeDesktop : IDesktopInteraction
@@ -208,6 +217,46 @@ namespace TronEvolutionPatcher.Tests
             Assert.That(model.NoRegistry, Is.True);
             Assert.That(model.HudEnabled, Is.False);
             Assert.That(model.IsBusy, Is.False);
+        }
+
+        [Test]
+        public async Task MissingProfileOffersCurrentGameLaunchAndExplicitCopyToSelectedLocation()
+        {
+            var backend = new FakeBackend();
+            backend.Current.DocumentsProfile = new GameProfileStatus
+            { DirectoryPath = @"C:\Documents\Profile", HasEngineIni = true, HasCheckpoint = true, ContainsFiles = true };
+            backend.Current.PortableProfile = new GameProfileStatus { DirectoryPath = @"C:\Game\UserData\Profile" };
+            var model = await Loaded(backend);
+            Assert.That(model.ProfileNotice, Is.Empty);
+            model.UserDirectory = true;
+            Assert.That(model.ProfileNotice, Does.Contain("Копировать профиль"));
+            Assert.That(model.CopyProfileCommand.CanExecute(null), Is.True);
+            Assert.That(model.LaunchCommand.CanExecute(null), Is.True);
+            await model.CopyProfileCommand.ExecuteAsync();
+            Assert.That(backend.CopyProfileCalls, Is.EqualTo(1));
+            Assert.That(backend.CopiedToPortable, Is.True);
+            Assert.That(backend.ApplyCalls, Is.Zero);
+            Assert.That(model.UserDirectory, Is.True, "Keep the requested profile selection after copying.");
+            Assert.That(model.ProfileNotice, Is.Empty);
+            Assert.That(model.CopyProfileCommand.CanExecute(null), Is.False);
+        }
+
+        [Test]
+        public async Task MissingBothProfilesOrPartialTargetNeverOffersMergingProfiles()
+        {
+            var backend = new FakeBackend();
+            backend.Current.DocumentsProfile = new GameProfileStatus { DirectoryPath = "Documents" };
+            backend.Current.PortableProfile = new GameProfileStatus { DirectoryPath = "UserData" };
+            var model = await Loaded(backend);
+            Assert.That(model.ProfileNotice, Does.Contain("первого сохранения"));
+            Assert.That(model.CopyProfileCommand.CanExecute(null), Is.False);
+            Assert.That(model.LaunchCommand.CanExecute(null), Is.True);
+            backend.Current.DocumentsProfile.HasEngineIni = true;
+            backend.Current.DocumentsProfile.HasCheckpoint = true;
+            backend.Current.PortableProfile.ContainsFiles = true;
+            model.UserDirectory = true;
+            Assert.That(model.ProfileNotice, Does.Contain("не пустая"));
+            Assert.That(model.CopyProfileCommand.CanExecute(null), Is.False);
         }
 
         [Test]
