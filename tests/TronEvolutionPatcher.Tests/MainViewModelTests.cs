@@ -59,8 +59,9 @@ namespace TronEvolutionPatcher.Tests
         {
             public string Chosen { get; set; }
             public int SupportCalls;
+            public Action OnSupport;
             public string ChooseDirectory(string initial) { return Chosen; }
-            public void OpenSupport() { SupportCalls++; }
+            public void OpenSupport() { SupportCalls++; OnSupport?.Invoke(); }
         }
 
         private static async Task<MainViewModel> Loaded(FakeBackend backend)
@@ -207,6 +208,43 @@ namespace TronEvolutionPatcher.Tests
             Assert.That(model.NoRegistry, Is.True);
             Assert.That(model.HudEnabled, Is.False);
             Assert.That(model.IsBusy, Is.False);
+        }
+
+        [Test]
+        public async Task SupportDoesNotActivateGameOperationProgressOrChangeOperationStatus()
+        {
+            var desktop = new FakeDesktop();
+            var model = new MainViewModel(new FakeBackend(), desktop);
+            var status = model.OperationStatus;
+            var busyChanges = 0;
+            bool? busyWhileOpening = null;
+            model.PropertyChanged += (sender, args) => { if (args.PropertyName == nameof(model.IsBusy)) busyChanges++; };
+            desktop.OnSupport = () => { busyWhileOpening = model.IsBusy; };
+
+            await model.SupportCommand.ExecuteAsync();
+
+            Assert.That(desktop.SupportCalls, Is.EqualTo(1));
+            Assert.That(busyWhileOpening, Is.False);
+            Assert.That(busyChanges, Is.Zero);
+            Assert.That(model.OperationStatus, Is.EqualTo(status));
+            Assert.That(model.LogText, Does.Contain("Открыта страница поддержки"));
+        }
+
+        [Test]
+        public async Task SupportBrowserFailureIsReportedWithoutActivatingProgress()
+        {
+            var desktop = new FakeDesktop { OnSupport = () => { throw new InvalidOperationException("Browser unavailable"); } };
+            var model = new MainViewModel(new FakeBackend(), desktop);
+            var busyChanges = 0;
+            model.PropertyChanged += (sender, args) => { if (args.PropertyName == nameof(model.IsBusy)) busyChanges++; };
+
+            await model.SupportCommand.ExecuteAsync();
+
+            Assert.That(model.ErrorMessage, Does.Contain("Browser unavailable"));
+            Assert.That(model.LogText, Does.Not.Contain("Открыта страница поддержки"));
+            Assert.That(busyChanges, Is.Zero);
+            Assert.That(model.IsBusy, Is.False);
+            Assert.That(model.SupportCommand.CanExecute(null), Is.True);
         }
 
         [Test]

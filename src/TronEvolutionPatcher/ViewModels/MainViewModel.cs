@@ -78,12 +78,11 @@ namespace TronEvolutionPatcher.ViewModels
                 var result = await Task.Run(() => backend.Launch(directory));
                 AddLog("Запущен " + Path.GetFileName(result.ExecutablePath) + ", PID " + result.ProcessId + ".");
             }), () => CanUseGame);
-            SupportCommand = Command(() => RunAsync("Открытие страницы поддержки", () =>
+            SupportCommand = Command(async () =>
             {
-                desktop.OpenSupport();
+                await Task.Run(() => desktop.OpenSupport());
                 AddLog("Открыта страница поддержки CodoMagia.");
-                return Task.CompletedTask;
-            }), () => IsIdle);
+            }, () => IsIdle);
             AddLog("TRON: Evolution Patcher 1.0.0 готов к работе.");
         }
 
