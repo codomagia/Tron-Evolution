@@ -18,21 +18,25 @@ namespace TronEvolutionPatcher.Tests
         [TestCase(true, false)]
         [TestCase(false, true)]
         [TestCase(true, true)]
-        public void ReadinessRequiresBothUserIniAndNonEmptyCheckpoint(bool ini, bool checkpoint)
+        public void ReadinessRequiresGameGeneratedConfigurationButNotGameplayCheckpoint(bool ini, bool checkpoint)
         {
             using (var temp = new TemporaryDirectory())
             {
-                if (ini) temp.WriteText("Documents/" + Ini, "[SystemSettings]\nResX=1280");
+                if (ini) {
+                    temp.WriteText("Documents/" + Ini, "[SystemSettings]\nResX=1280");
+                    temp.WriteText("Documents/" + Ini.Replace("GridEngine.ini", "GridGame.ini"), "game");
+                    temp.WriteText("Documents/" + Ini.Replace("GridEngine.ini", "GridInput.ini"), "input");
+                }
                 if (checkpoint) temp.Write("Documents/" + Save, new byte[] { 3, 4 });
                 var profile = Service(temp).Inspect(DirectoryFor(temp), false);
-                Assert.That(profile.IsInitialized, Is.EqualTo(ini && checkpoint));
+                Assert.That(profile.IsInitialized, Is.EqualTo(ini));
                 if (!profile.IsInitialized)
                     Assert.Throws<IOException>(() => Service(temp).RequireInitialized(DirectoryFor(temp), false));
             }
         }
 
         [Test]
-        public void EmptySaveAndKeyBindingsAloneAreNotAnExistingSavedGame()
+        public void KeyBindingsAndSingleEngineIniDoNotReplaceMissingConfiguration()
         {
             using (var temp = new TemporaryDirectory())
             {
@@ -52,6 +56,7 @@ namespace TronEvolutionPatcher.Tests
                 var source = toPortable ? "Documents/" : "Game/UserData/";
                 var target = toPortable ? "Game/UserData/" : "Documents/";
                 var exe = temp.Write("Game/Binaries/Win32Live/GridGame.exe", new byte[] { 9, 8, 7 });
+                temp.WriteText(source + Ini.Replace("GridEngine.ini", "GridGame.ini"), "game");
                 var ini = temp.WriteText(source + Ini, "[SystemSettings]\nResX=1280");
                 var save = temp.Write(source + Save, new byte[] { 1, 2, 3 });
                 temp.WriteText(source + Profile + "UnrealEngine3/GridGame/Config/GridInput.ini", "input settings");
@@ -65,10 +70,28 @@ namespace TronEvolutionPatcher.Tests
         }
 
         [Test]
+        public void ConfigurationCanBeCopiedBeforeFirstGameplayCheckpoint()
+        {
+            using (var temp = new TemporaryDirectory())
+            {
+                System.IO.Directory.CreateDirectory(DirectoryFor(temp));
+                foreach (var name in new[] { "GridEngine.ini", "GridGame.ini", "GridInput.ini" })
+                    temp.WriteText("Documents/" + Ini.Replace("GridEngine.ini", name), "game-generated config");
+                Service(temp).Copy(DirectoryFor(temp), true);
+                var target = Service(temp).Inspect(DirectoryFor(temp), true);
+                Assert.That(target.IsInitialized, Is.True);
+                Assert.That(target.HasCheckpoint, Is.False);
+                Assert.That(File.Exists(Path.Combine(temp.Root, "Game/UserData/" + Save)), Is.False);
+            }
+        }
+
+        [Test]
         public void IncompleteNonEmptyTargetIsNotMixedOrOverwritten()
         {
             using (var temp = new TemporaryDirectory())
             {
+                temp.WriteText("Documents/" + Ini.Replace("GridEngine.ini", "GridGame.ini"), "game");
+                temp.WriteText("Documents/" + Ini.Replace("GridEngine.ini", "GridInput.ini"), "input");
                 temp.WriteText("Documents/" + Ini, "source"); temp.Write("Documents/" + Save, new byte[] { 1 });
                 var target = temp.WriteText("Game/UserData/" + Ini, "old partial config");
                 Assert.Throws<IOException>(() => Service(temp).Copy(DirectoryFor(temp), true));
@@ -95,6 +118,8 @@ namespace TronEvolutionPatcher.Tests
         {
             using (var temp = new TemporaryDirectory())
             {
+                temp.WriteText("Documents/" + Ini.Replace("GridEngine.ini", "GridGame.ini"), "game");
+                temp.WriteText("Documents/" + Ini.Replace("GridEngine.ini", "GridInput.ini"), "input");
                 var source = temp.WriteText("Documents/" + Ini, "source config");
                 temp.Write("Documents/" + Save, new byte[] { 1 });
                 System.IO.Directory.CreateDirectory(Path.Combine(temp.Root, "Game"));

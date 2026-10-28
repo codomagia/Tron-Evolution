@@ -59,7 +59,7 @@ namespace TronEvolutionPatcher.Tests
             {
                 CopyProfileCalls++; CopiedToPortable = toPortable;
                 var target = toPortable ? Current.PortableProfile : Current.DocumentsProfile;
-                target.HasEngineIni = true; target.HasCheckpoint = true; target.ContainsFiles = true;
+                target.HasEngineIni = true; target.HasGameIni = true; target.HasInputIni = true; target.HasCheckpoint = true; target.ContainsFiles = true;
                 return new[] { "Профиль скопирован." };
             }
         }
@@ -220,11 +220,24 @@ namespace TronEvolutionPatcher.Tests
         }
 
         [Test]
+        public async Task CompleteGameConfigurationWithoutCheckpointDoesNotShowMissingProfileWarning()
+        {
+            var backend = new FakeBackend();
+            backend.Current.DocumentsProfile = new GameProfileStatus
+            { HasEngineIni = true, HasGameIni = true, HasInputIni = true, ContainsFiles = true };
+            backend.Current.PortableProfile = new GameProfileStatus();
+            var model = await Loaded(backend);
+            Assert.That(model.ProfileNotice, Is.Empty);
+            Assert.That(model.ApplyCommand.CanExecute(null), Is.True);
+            Assert.That(model.CopyProfileCommand.CanExecute(null), Is.False);
+        }
+
+        [Test]
         public async Task MissingProfileOffersCurrentGameLaunchAndExplicitCopyToSelectedLocation()
         {
             var backend = new FakeBackend();
             backend.Current.DocumentsProfile = new GameProfileStatus
-            { DirectoryPath = @"C:\Documents\Profile", HasEngineIni = true, HasCheckpoint = true, ContainsFiles = true };
+            { DirectoryPath = @"C:\Documents\Profile", HasEngineIni = true, HasGameIni = true, HasInputIni = true, HasCheckpoint = true, ContainsFiles = true };
             backend.Current.PortableProfile = new GameProfileStatus { DirectoryPath = @"C:\Game\UserData\Profile" };
             var model = await Loaded(backend);
             Assert.That(model.ProfileNotice, Is.Empty);
@@ -248,10 +261,12 @@ namespace TronEvolutionPatcher.Tests
             backend.Current.DocumentsProfile = new GameProfileStatus { DirectoryPath = "Documents" };
             backend.Current.PortableProfile = new GameProfileStatus { DirectoryPath = "UserData" };
             var model = await Loaded(backend);
-            Assert.That(model.ProfileNotice, Does.Contain("первого сохранения"));
+            Assert.That(model.ProfileNotice, Does.Contain("пользовательских конфигов"));
             Assert.That(model.CopyProfileCommand.CanExecute(null), Is.False);
             Assert.That(model.LaunchCommand.CanExecute(null), Is.True);
             backend.Current.DocumentsProfile.HasEngineIni = true;
+            backend.Current.DocumentsProfile.HasGameIni = true;
+            backend.Current.DocumentsProfile.HasInputIni = true;
             backend.Current.DocumentsProfile.HasCheckpoint = true;
             backend.Current.PortableProfile.ContainsFiles = true;
             model.UserDirectory = true;

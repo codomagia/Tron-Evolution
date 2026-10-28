@@ -128,15 +128,14 @@ namespace TronEvolutionPatcher.ViewModels
                 var target = SelectedProfile;
                 if (target == null || target.IsInitialized) return "";
                 var location = UserDirectory ? "UserData" : "Документы";
-                var missing = !target.HasEngineIni && !target.HasCheckpoint ? "GridEngine.ini и сохранение CHECKPT" :
-                    !target.HasEngineIni ? "GridEngine.ini" : "сохранение CHECKPT";
-                var text = "В профиле «" + location + "» отсутствует " + missing + ". Настройки не будут применены.\n" + target.DirectoryPath;
+                var missing = GameProfileService.MissingConfigurations(target);
+                var text = "В профиле «" + location + "» отсутствуют " + missing + ". Настройки не будут применены.\n" + target.DirectoryPath;
                 if (OtherProfile?.IsInitialized == true)
                     return text + "\nНайден другой профиль: " + OtherProfile.DirectoryPath +
                         (target.ContainsFiles ? "\nЦелевая папка не пустая: выберите существующий профиль или сохраните неполный профиль отдельно перед копированием. Перезапись и смешивание отключены." :
                         "\nНажмите «Копировать профиль»: источник останется на месте. Затем примените настройки.");
-                return text + "\nЗапустите игру, создайте профиль и дойдите до первого сохранения, затем нажмите «Обновить». Сейчас игра использует «" +
-                    (snapshot.Status.UserDirectoryRedirected ? "UserData" : "Документы") + "». Патчер не создаёт игровые файлы вместо игры.";
+                return text + "\nЗапустите игру для создания пользовательских конфигов, затем нажмите «Обновить». Сейчас игра использует «" +
+                    (snapshot.Status.UserDirectoryRedirected ? "UserData" : "Документы") + "». CHECKPT для настройки не требуется; патчер не создаёт INI вместо игры.";
             }
         }
         public bool HudEnabled { get => hud; set { if (Set(ref hud, value)) QueueDxvkUpdate(); } }

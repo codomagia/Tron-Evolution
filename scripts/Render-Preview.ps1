@@ -31,7 +31,7 @@ if (-not $Empty) {
     $portableProfile = [Activator]::CreateInstance($patcherAssembly.GetType('TronEvolutionPatcher.Models.GameProfileStatus'))
     Set-PreviewProperty $documentsProfile 'DirectoryPath' 'C:\Documents\Disney Interactive Studios\Tron Evolution'
     Set-PreviewProperty $portableProfile 'DirectoryPath' 'F:\Games Portable\Tron Evolution\UserData\Disney Interactive Studios\Tron Evolution'
-    foreach ($field in @('HasEngineIni', 'HasCheckpoint', 'ContainsFiles')) {
+    foreach ($field in @('HasEngineIni', 'HasGameIni', 'HasInputIni', 'HasCheckpoint', 'ContainsFiles')) {
         Set-PreviewProperty $documentsProfile $field ($Profile -ne 'Missing')
         Set-PreviewProperty $portableProfile $field ($Profile -eq 'Ready')
     }
