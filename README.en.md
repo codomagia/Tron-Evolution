@@ -65,6 +65,12 @@ Pre-built binaries are available in [Releases](https://github.com/codomagia/Tron
 
 ---
 
+## Source code
+
+The patcher is open source: C# / WPF sources are in `src`, tests are in `tests`, and the solution is `TronEvolutionPatcher.sln`. Python is not required to build or run it. [Build and test instructions](docs/BUILD.en.md).
+
+---
+
 ## License
 
 Distributed under the open-source MIT License.  
