@@ -7,7 +7,13 @@
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                 <Image Source="/Assets/logo.png" Width="52" Height="52" Margin="0,0,15,0" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="TRON: EVOLUTION" FontSize="25" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" /><TextBlock Text="DirectX 9 / Vulkan · FPS и портативность · v1.0.0" FontSize="12" Foreground="{StaticResource MutedText}" Margin="0,4,0,0" /></StackPanel>
-                <Button Grid.Column="2" Content="Поддержать" Command="{Binding SupportCommand}" VerticalAlignment="Center" ToolTip="Поддержать CodoMagia на Boosty" />
+                <Button Grid.Column="2" Command="{Binding SupportCommand}" VerticalAlignment="Center" ToolTip="Поддержать CodoMagia на Boosty" AutomationProperties.Name="Поддержать">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Path Width="13" Height="13" Stretch="Uniform" Fill="#E11D48" Margin="0,0,5,0" VerticalAlignment="Center"
+                              Data="M12,21.35L10.55,20.03C5.4,15.36 2,12.28 2,8.5C2,5.42 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.09C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.42 22,8.5C22,12.28 18.6,15.36 13.45,20.04L12,21.35Z" />
+                        <TextBlock Text="Поддержать" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
             </Grid>
             <Border Style="{StaticResource Card}"><StackPanel>
                 <TextBlock Text="ПАПКА ИГРЫ" Style="{StaticResource Caption}" />
